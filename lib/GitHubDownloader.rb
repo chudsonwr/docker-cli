@@ -13,8 +13,11 @@ class GitHubDownloader
               else
                 'master'
               end
-    @url = "https://github.com/#{project_repo}/archive/#{branch}.zip"
+    @url = "https://github.com/#{project_repo}/archive/#{@branch}.zip"
   end
+
+  attr_reader :url
+  attr_reader :branch
 
   def download_file(file_url)
     file_name = 'repo.zip'
