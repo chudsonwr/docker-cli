@@ -46,13 +46,15 @@ The docker-compose file for the application you're building MUST conform to cert
     default:
       external:
         name: nginx-proxy
-```
+  ```
+  
 * It must have an environments element with a `VIRTUAL_HOST=` value inside an array. 
 (The value of this variable does not matter as it's set by the tool)
-```
+  ```
   environment:
     - "VIRTUAL_HOST=nginx_test.dev.com"
-```
+  ```
+
 * If it uses a database, must have a service called `db`.
 (this will get renamed as per the version you're building from git)  
 
