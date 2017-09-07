@@ -78,6 +78,18 @@ class GitHubDownloader
     return "#{destination}/#{zip_name.name}" unless zip_name.nil?
   end
 
+  # setup correct perms on applicaiton dir
+  def reset_permissions(path)
+    # puts "modding files here #{destination}/#{zip_name.name}/**/*"
+    begin
+      FileUtils.chmod 0744, Dir.glob("#{path}**/*")
+      FileUtils.chmod 0755, Dir.glob("#{path}**/*/")
+      FileUtils.chmod 0755, Dir.glob("#{path}bin/*")
+    rescue => e
+      puts e
+    end
+  end
+
   def retrieve_repo()
     # verify the project/repo/branch actually exists
     final_url = url_exist?(@url)
@@ -86,6 +98,8 @@ class GitHubDownloader
       file_path = download_file(final_url)
       # unzip the archive
       unzipped = unzip_file(file_path, "#{File.dirname(__FILE__)}/../repos")
+      # reset perms on application
+      reset_permissions(unzipped)
       # remove compressed archive file once unzipped
       FileUtils.rm_rf(file_path) if unzipped
       return unzipped
