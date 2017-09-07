@@ -143,7 +143,7 @@ class ContainerMgmt
       begin
         image.remove
       rescue => e
-        @clilog.debug(e)
+        @clilog.error(e)
       end
     end
   end
