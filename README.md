@@ -20,7 +20,7 @@ This is the action you would like to perform. It mirrors most actions available 
 * _relaunch_ - which will stop a running compose stack, download the changes, rebuild and relaunch  
 
 ##### --github
-This is the Github project and reposiroty you wish to build, i.e `chudsonwr/my_web_app`  
+This is the Github project and repository you wish to build, i.e `chudsonwr/my_web_app`  
 
 ##### --version
 This is either the git commit hash or the branch you would like to build  
@@ -34,6 +34,6 @@ This is either the git commit hash or the branch you would like to build
   
     
 ## Setup
-To setup on your local environment run `scripts/setup_local_env.sh`
+To setup dependencies on your local environment run `scripts/setup_local_env.sh`
 
 
