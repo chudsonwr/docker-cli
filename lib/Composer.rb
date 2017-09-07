@@ -2,8 +2,9 @@ require 'docker/compose'
 require 'json'
 
 class Composer
-  def initialize(directory)
+  def initialize(directory, logger: nil)
     @compose = Docker::Compose::Session.new(dir: directory)
+    @clilog = logger
   end
 
   def stop()
@@ -48,15 +49,15 @@ class Composer
 
   def update_port(compose_object)
     config = compose_object.config
-    puts compose_object.dir
+    @clilog.debug(config)
     file = compose_object.dir + compose_object.file
-    puts file
+    @clilog.debug(file)
     local_port = config['services']['web']['ports'][0].split(':')[1]
     old_port = config['services']['web']['ports'][0].split(':')[0]
     new_port = old_port.to_i + 1
     config['services']['web']['ports'][0] = "#{new_port}:#{local_port}"
     write_config_to_disk(config, file)
-    puts "the port specified, #{old_port}, was already in use. Incrementing by 1 and retrying."
+    @clilog.debug("the port specified, #{old_port}, was already in use. Incrementing by 1 and retrying.")
   end
 
   def write_config_to_disk(config, file_path)
@@ -77,7 +78,7 @@ class Composer
           update_port(@compose)
           count += 1
         else
-          puts e
+          @clilog.fatal(e)
           exit
         end
       end

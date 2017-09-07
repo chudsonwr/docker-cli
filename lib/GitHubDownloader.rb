@@ -6,7 +6,8 @@ require 'zip'
 
 # Manages download of git repo as branch or commit
 class GitHubDownloader
-  def initialize(project_repo: nil, branch: nil)
+  def initialize(project_repo: nil, branch: nil, logger: nil)
+    @clilog = logger
     # If no branch specified assume master
     @branch = if branch
                 branch
@@ -86,7 +87,7 @@ class GitHubDownloader
       FileUtils.chmod 0755, Dir.glob("#{path}**/*/")
       FileUtils.chmod 0755, Dir.glob("#{path}bin/*")
     rescue => e
-      puts e
+      @csilog.error(e)
     end
   end
 
@@ -104,8 +105,8 @@ class GitHubDownloader
       FileUtils.rm_rf(file_path) if unzipped
       return unzipped
     else
-      puts "We couldn't find the repo specified, here is the error."
-      puts final_url
+      @csilog.error('We couldn\'t find the repo specified, here is the error.')
+      @csilog.fatal(final_url)
       exit
     end
   end

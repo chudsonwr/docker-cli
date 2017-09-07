@@ -5,7 +5,8 @@ require 'docker'
 
 # Main class for orchestrating docker compose stacks.
 class ContainerMgmt
-  def initialize(action: nil, project_repo: nil, branch: nil)
+  def initialize(logger: nil, action: nil, project_repo: nil, branch: nil)
+    @clilog = logger
     @project_repo = project_repo
     @branch = if branch
                 branch
@@ -14,13 +15,13 @@ class ContainerMgmt
               end
     @action = action
     @path = "#{File.dirname(__FILE__)}/../repos/#{@project_repo.split('/')[-1]}-#{@branch}/"
-    @compose = Composer.new(@path)
-    start_network()
-    start_proxy()
+    @compose = Composer.new(@path, logger: @clilog)
   end
 
   # depending on the 'action' from the CLI perform various docker functions.
   def process()
+    start_network()
+    start_proxy()
     case @action
     when 'build'
       # downloads repo and builds the image
@@ -60,8 +61,9 @@ class ContainerMgmt
 
   # Starts nginx proxy to allow multiple sites hosted from the same tcp Port based on host-headers
   def start_proxy()
-    proxy_compose = Composer.new("#{File.dirname(__FILE__)}/../proxy")
+    proxy_compose = Composer.new("#{File.dirname(__FILE__)}/../proxy", logger: @csilog)
     status = proxy_compose.processes
+    @clilog.debug('starting the proxy server') if status.empty?
     proxy_compose.launch if status.empty?
   end
 
@@ -70,6 +72,7 @@ class ContainerMgmt
   def start_network()
     network_name = 'nginx-proxy'
     network = Docker::Network.all.find { |network| network.info['Name'] == network_name }
+    @clilog.debug('starting the proxy network') unless network
     Docker::Network.create(network_name) unless network
   end
 
@@ -89,10 +92,39 @@ class ContainerMgmt
 
   # pulls down the archive from GitHub
   def retrieve_repo()
-    puts 'updating repo'
-    dloader = GitHubDownloader.new(project_repo: @project_repo, branch: @branch)
+    @clilog.info('Updating Repo')
+    dloader = GitHubDownloader.new(project_repo: @project_repo, branch: @branch, logger: @csilog)
     path = dloader.retrieve_repo()
+    update_repo_with_version()
     return path
+  end
+
+  # Updates the DB details in the app to allow multiple DB connections
+  # required because all instances share the nginx docker network. :(
+  def update_repo_with_version()
+    update_compose_file()
+    update_rails_db_connection("#{@path}config/database.yml")
+  end
+
+  # updates the compose file with a unique value for VIRTUAL_HOST which is required for the nginx reverse proxy
+  # updates the db service in compose to be unique
+  def update_compose_file()
+    file_path = "#{@path}docker-compose.yml"
+    obj = YAML.load_file(file_path)
+    obj['services']["db-#{@branch}"] = obj['services']['db']
+    obj['services']['web']['depends_on'] = ["db-#{@branch}"]
+    obj['services']['web']['environment'].find { |obj| obj[0..12] == 'VIRTUAL_HOST=' }.replace("VIRTUAL_HOST=#{@branch}.dev.com")
+    obj['services'].delete('db')
+    @compose.write_config_to_disk(obj, file_path)
+  end
+
+  # updates the db connection info in the rails config/database.yml file to reflect the new unique db service in docker
+  def update_rails_db_connection(file_path)
+    obj = YAML.load_file(file_path)
+    obj.each do |env|
+      if env[1]['host'] then env[1]['host'] = "db-#{@branch}" end
+    end
+    @compose.write_config_to_disk(obj, file_path)
   end
 
   # delete all running containers
@@ -111,7 +143,7 @@ class ContainerMgmt
       begin
         image.remove
       rescue => e
-        puts e
+        @clilog.debug(e)
       end
     end
   end
