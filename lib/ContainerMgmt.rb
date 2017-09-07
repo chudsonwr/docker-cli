@@ -15,6 +15,8 @@ class ContainerMgmt
     @action = action
     @path = "#{File.dirname(__FILE__)}/../repos/#{@project_repo.split('/')[-1]}-#{@branch}/"
     @compose = Composer.new(@path)
+    start_network()
+    start_proxy()
   end
 
   # depending on the 'action' from the CLI perform various docker functions.
@@ -42,6 +44,9 @@ class ContainerMgmt
     when 'down'     then @compose.down
     when 'logs'     then @compose.logs
     when 'config'   then @compose.config
+    when 'clean_all'
+      delete_all_containers()
+      delete_all_images()
     end
   end
 
@@ -51,6 +56,21 @@ class ContainerMgmt
 
   def launch_stack()
     @compose.launch
+  end
+
+  # Starts nginx proxy to allow multiple sites hosted from the same tcp Port based on host-headers
+  def start_proxy()
+    proxy_compose = Composer.new("#{File.dirname(__FILE__)}/../proxy")
+    status = proxy_compose.processes
+    proxy_compose.launch if status.empty?
+  end
+
+  # Allows nginx to set configs for each container launched. Requires that the application 
+  # you're building has a docker-compose file that references this network
+  def start_network()
+    network_name = 'nginx-proxy'
+    network = Docker::Network.all.find { |network| network.info['Name'] == network_name }
+    Docker::Network.create(network_name) unless network
   end
 
   # checks if the application exists or is already running inside a container
@@ -73,5 +93,26 @@ class ContainerMgmt
     dloader = GitHubDownloader.new(project_repo: @project_repo, branch: @branch)
     path = dloader.retrieve_repo()
     return path
+  end
+
+  # delete all running containers
+  def delete_all_containers()
+    containers = Docker::Container.all(all: true)
+    containers.each do |container|
+      container.stop
+      container.delete
+    end
+  end
+
+  # deletes all local images
+  def delete_all_images()
+    images = Docker::Image.all(all: true)
+    images.each do |image|
+      begin
+        image.remove
+      rescue => e
+        puts e
+      end
+    end
   end
 end

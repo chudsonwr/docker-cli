@@ -14,7 +14,7 @@ class Provisioner
 
   # Define the allowed actions
   def self.actions
-    return ['build', 'launch', 'pause', 'unpause', 'down', 'logs', 'up', 'stop', 'relaunch', 'config']
+    return ['build', 'launch', 'pause', 'unpause', 'down', 'logs', 'up', 'stop', 'relaunch', 'config', 'clean_all']
   end
 
   def supported_action(action)
