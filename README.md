@@ -21,7 +21,7 @@ This is the action you would like to perform. It mirrors most actions available 
 * _relaunch_ - which will stop a running compose stack, download the changes, rebuild and relaunch  
 
 ##### --github
-This is the Github project and repository you wish to build, i.e `chudsonwr/my_web_app`  
+This is the Github project and repository you wish to build, i.e `chudsonwr/sample_app`  
 
 ##### --version
 This is either the git commit hash or the branch you would like to build  
@@ -32,6 +32,10 @@ This is either the git commit hash or the branch you would like to build
 `ruby bin/provision.rb --github chudsonwr/sample_app --version master --action config`
 
 `ruby bin/provision.rb --github chudsonwr/sample_app --version master --action down`
+
+`ruby bin/provision.rb --github chudsonwr/sample_app --version bae426569acf019e4f38e03d08f4d632858ae51a --action launch`
+
+`ruby bin/provision.rb --github chudsonwr/sample_app --version bae426569acf019e4f38e03d08f4d632858ae51a --action down`
   
     
 ## Setup
@@ -47,7 +51,7 @@ The docker-compose file for the application you're building MUST conform to cert
       external:
         name: nginx-proxy
   ```
-  
+
 * It must have an environments element with a `VIRTUAL_HOST=` value inside an array. 
 (The value of this variable does not matter as it's set by the tool)
   ```
@@ -62,7 +66,7 @@ The docker-compose file can remain static between versions (branches/commits etc
 
 ## To Do
 
-Put in more testing
-Allow the user to turn on/off the proxy functionality
-Add the `Networks` element to docker-compose.yml files IF proxy is turned on
+* Put in more testing
+* Allow the user to turn on/off the proxy functionality
+* Add the `Networks` element to docker-compose.yml files IF proxy is turned on
 
