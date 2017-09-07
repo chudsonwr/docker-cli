@@ -2,19 +2,22 @@
 require 'optparse'
 require 'ostruct'
 require 'json'
-require_relative '../lib/GitHubDownloader'
-require_relative '../lib/Composer'
 require_relative '../lib/ContainerMgmt'
+require_relative '../lib/CLILogger'
+
 
 # Shim for launching the ContainerMgmt orchestration class
 class Provisioner
   def initialize(opts = {})
     @opts = opts
+    log_level = 'INFO'
+    log_level = ENV['CLI_LOG_LEVEL'] unless ENV['CLI_LOG_LEVEL'].nil?
+    @clilog = CLILogger.new(log_level, 'STDOUT')
   end
 
   # Define the allowed actions
   def self.actions
-    return ['build', 'launch', 'pause', 'unpause', 'down', 'logs', 'up', 'stop', 'relaunch', 'config']
+    return ['build', 'launch', 'pause', 'unpause', 'down', 'logs', 'up', 'stop', 'relaunch', 'config', 'clean_all']
   end
 
   def supported_action(action)
@@ -26,14 +29,15 @@ class Provisioner
       @opts[:action] = action.downcase()
       return true
     else
-      puts "[Provisioner] Unsupported Action: #{action}"
+      @clilog.error("[Provisioner] Unsupported Action: #{action}")
       return false
     end
   end
 
   # Main method to launch the ContainerMgmt class
   def provision()
-    ContainerMgmt.new(action: @opts[:action].to_s, project_repo: @opts[:github], branch: @opts[:version]).process()
+    @clilog.debug("Launching the stack #{@opts[:github]} - #{@opts[:version]} with the action: #{@opts[:action]}")
+    ContainerMgmt.new(logger: @clilog, action: @opts[:action].to_s, project_repo: @opts[:github], branch: @opts[:version]).process()
   end
 end
 
