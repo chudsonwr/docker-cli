@@ -8,7 +8,7 @@ MiniTest::Reporters.use! [MiniTest::Reporters::DefaultReporter.new,
                           MiniTest::Reporters::JUnitReporter.new]
 require_relative '../lib/ContainerMgmt'
 
-class TestComposer < MiniTest::Test
+class TestContainerMgmt < MiniTest::Test
 
   def setup()
     @container = ContainerMgmt.new(action: 'config', project_repo: 'test/test', branch: 'master')
