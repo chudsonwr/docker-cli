@@ -29,6 +29,7 @@ class ContainerMgmt
 
   # depending on the 'action' from the CLI perform various docker functions.
   def process()
+    # Start the proxy network and nginx reverse proxy container
     if @proxy
       start_network()
       start_proxy()
@@ -108,8 +109,7 @@ class ContainerMgmt
     return path
   end
 
-  # Updates the DB details in the app to allow multiple DB connections
-  # required because all instances share the nginx docker network when using the proxy. :(
+  # Main method for updating the Rails and docker files to allow multiple versions to run.
   def update_repo_with_version()
     update_compose_file()
     update_rails_db_connection("#{@path}config/database.yml")
@@ -117,6 +117,7 @@ class ContainerMgmt
 
   # updates the compose file with a unique value for VIRTUAL_HOST which is required for the nginx reverse proxy
   # updates the db service in compose to be unique
+  # updtes the virtual host for reverse proxy to be unique
   def update_compose_file()
     file_path = "#{@path}docker-compose.yml"
     obj = YAML.load_file(file_path)
@@ -135,7 +136,7 @@ class ContainerMgmt
     @compose.write_config_to_disk(obj, file_path)
   end
   
-  # Update db in compose file
+  # Update db in compose file object
   def update_db_element(obj)
     obj['services']["db-#{@branch}"] = obj['services']['db']
     obj['services']['web']['depends_on'] = ["db-#{@branch}"]
@@ -143,6 +144,7 @@ class ContainerMgmt
     return obj
   end
 
+  # COonverts a single string entry for envronment variables in docker compose object into an array
   def convert_to_array(obj)
     if obj['services']['web']['environment'].class == String
       obj['services']['web']['environment'] = [obj['services']['web']['environment']]
@@ -150,6 +152,7 @@ class ContainerMgmt
     obj
   end
 
+  # Updates or adds the virtual host env var in a docker compose object
   def update_virtual_host(obj)
     if obj['services']['web']['environment'].is_a? String
       obj = convert_to_array(obj)

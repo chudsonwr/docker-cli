@@ -20,9 +20,9 @@ apt-get install -y docker-compose
 apt-get install -y ruby 2.3.1
 
 groupadd docker
-gpasswd -a $USER docker
 
-#RAILS
+
+
 apt-get install -y build-essential patch ruby-dev zlib1g-dev liblzma-dev sqlite3 libsqlite3-dev
 
 # for nokogiri
@@ -33,3 +33,5 @@ apt-get install -y libqtwebkit4 libqt4-dev xvfb
 
 
 gem install bundler
+
+gpasswd -a wradmin docker
