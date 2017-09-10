@@ -37,7 +37,7 @@ class Provisioner
   # Main method to launch the ContainerMgmt class
   def provision()
     @clilog.debug("Launching the stack #{@opts[:github]} - #{@opts[:version]} with the action: #{@opts[:action]}")
-    ContainerMgmt.new(logger: @clilog, action: @opts[:action].to_s, project_repo: @opts[:github], branch: @opts[:version]).process()
+    ContainerMgmt.new(logger: @clilog, proxy: @opts[:proxy], action: @opts[:action].to_s, project_repo: @opts[:github], branch: @opts[:version]).process()
   end
 end
 
@@ -60,6 +60,9 @@ def parse_args(args)
     opts.on('-v', '--version VERSION', 'The branch or commit hash to build') do |version|
       @options.version = version
     end
+    opts.on("--[no-]proxy", "boolean for setting up the reverse proxy", "true or false.") do |proxy|
+      @options.proxy = proxy
+    end
   end
 
   opt_parser.parse!(args)
@@ -75,6 +78,7 @@ if __FILE__ == $PROGRAM_NAME
   @options.action = 'launch'
   @options.github = nil
   @options.version = 'master'
+  @options.proxy = false
 
   parse_args(ARGV)
 

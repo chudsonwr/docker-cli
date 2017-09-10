@@ -5,8 +5,9 @@ require 'docker'
 
 # Main class for orchestrating docker compose stacks.
 class ContainerMgmt
-  def initialize(logger: nil, action: nil, project_repo: nil, branch: nil)
+  def initialize(logger: nil, action: nil, project_repo: nil, branch: nil, proxy: false)
     @clilog = logger
+    @proxy = proxy
     @project_repo = project_repo
     @branch = if branch
                 branch
@@ -16,12 +17,22 @@ class ContainerMgmt
     @action = action
     @path = "#{File.dirname(__FILE__)}/../repos/#{@project_repo.split('/')[-1]}-#{@branch}/"
     @compose = Composer.new(@path, logger: @clilog)
+    @proxy_net = 'nginx-proxy' if @proxy
   end
+
+  attr_reader :action
+  attr_reader :branch
+  attr_reader :project_repo
+  attr_reader :path
+  attr_reader :proxy
+  attr_reader :proxy_net
 
   # depending on the 'action' from the CLI perform various docker functions.
   def process()
-    start_network()
-    start_proxy()
+    if @proxy
+      start_network()
+      start_proxy()
+    end
     case @action
     when 'build'
       # downloads repo and builds the image
@@ -67,13 +78,11 @@ class ContainerMgmt
     proxy_compose.launch if status.empty?
   end
 
-  # Allows nginx to set configs for each container launched. Requires that the application 
-  # you're building has a docker-compose file that references this network
+  # Allows nginx to set configs for each container launched.
   def start_network()
-    network_name = 'nginx-proxy'
-    network = Docker::Network.all.find { |network| network.info['Name'] == network_name }
+    network = Docker::Network.all.find { |network| network.info['Name'] == @proxy_net }
     @clilog.debug('starting the proxy network') unless network
-    Docker::Network.create(network_name) unless network
+    Docker::Network.create(@proxy_net) unless network
   end
 
   # checks if the application exists or is already running inside a container
@@ -95,12 +104,12 @@ class ContainerMgmt
     @clilog.info('Updating Repo')
     dloader = GitHubDownloader.new(project_repo: @project_repo, branch: @branch, logger: @csilog)
     path = dloader.retrieve_repo()
-    update_repo_with_version()
+    update_repo_with_version() if @proxy
     return path
   end
 
   # Updates the DB details in the app to allow multiple DB connections
-  # required because all instances share the nginx docker network. :(
+  # required because all instances share the nginx docker network when using the proxy. :(
   def update_repo_with_version()
     update_compose_file()
     update_rails_db_connection("#{@path}config/database.yml")
@@ -111,10 +120,9 @@ class ContainerMgmt
   def update_compose_file()
     file_path = "#{@path}docker-compose.yml"
     obj = YAML.load_file(file_path)
-    obj['services']["db-#{@branch}"] = obj['services']['db']
-    obj['services']['web']['depends_on'] = ["db-#{@branch}"]
-    obj['services']['web']['environment'].find { |obj| obj[0..12] == 'VIRTUAL_HOST=' }.replace("VIRTUAL_HOST=#{@branch}.dev.com")
-    obj['services'].delete('db')
+    obj = update_db_element(obj)
+    obj = add_net_element(obj)
+    obj = update_virtual_host(obj)
     @compose.write_config_to_disk(obj, file_path)
   end
 
@@ -125,6 +133,47 @@ class ContainerMgmt
       if env[1]['host'] then env[1]['host'] = "db-#{@branch}" end
     end
     @compose.write_config_to_disk(obj, file_path)
+  end
+  
+  # Update db in compose file
+  def update_db_element(obj)
+    obj['services']["db-#{@branch}"] = obj['services']['db']
+    obj['services']['web']['depends_on'] = ["db-#{@branch}"]
+    obj['services'].delete('db')
+    return obj
+  end
+
+  def convert_to_array(obj)
+    if obj['services']['web']['environment'].class == String
+      obj['services']['web']['environment'] = [obj['services']['web']['environment']]
+    end
+    obj
+  end
+
+  def update_virtual_host(obj)
+    if obj['services']['web']['environment'].is_a? String
+      obj = convert_to_array(obj)
+      obj = update_virtual_host(obj)
+    elsif obj['services']['web']['environment'].is_a? Array
+      if obj['services']['web']['environment'].find { |obj| obj[0..12] == 'VIRTUAL_HOST=' }.nil?
+        obj['services']['web']['environment'] << "VIRTUAL_HOST=#{@branch}.dev.com"
+      else
+        obj['services']['web']['environment'].find { |obj| obj[0..12] == 'VIRTUAL_HOST=' }.replace("VIRTUAL_HOST=#{@branch}.dev.com")
+      end
+    else
+      obj['services']['web']['environment'] = ["VIRTUAL_HOST=#{@branch}.dev.com"]
+    end
+    obj
+  end
+
+  # Adds the networks element to the compose file if it's not already there
+  def add_net_element(obj)
+    unless obj.dig('networks', 'default', 'external', 'name') == @proxy_net
+      obj['networks'] = {"default"=>{"external"=>{"name" => @proxy_net}}} unless obj.dig('networks')
+      obj['networks']['default'] = {"external"=>{"name" => @proxy_net}} unless obj.dig('networks', 'default')
+      obj['networks']['default']['external'] = {"name" => @proxy_net}
+    end
+    return obj
   end
 
   # delete all running containers

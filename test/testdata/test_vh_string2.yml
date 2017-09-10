@@ -1,0 +1,16 @@
+version: '2'
+services:
+  db:
+    image: postgres
+  web:
+    build: .
+    command: bash -c "sleep 10 && rake db:create && rake db:migrate && sleep 5 && rm -rf /myapp/tmp/pids/server.pid && bin/rails s -b '0.0.0.0'"
+    ports:
+      - "3000:3000"
+    environment: "RANDOM_VARIABLE=keepme"
+    depends_on:
+      - db
+networks:
+  default:
+    external:
+      name: old_network
