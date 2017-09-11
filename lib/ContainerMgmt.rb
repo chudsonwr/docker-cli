@@ -187,13 +187,13 @@ class ContainerMgmt
     return obj
   end
 
-  # delete all running containers
+ # delete all running containers
   def delete_all_containers()
     containers = Docker::Container.all(all: true)
     containers.each do |container|
-      @clilog.debug("Stopping container: #{container.name}")
+      @clilog.debug("Stopping container: #{container.info['Names'][0]}")
       container.stop
-      @clilog.debug("Deleting container: #{container.name}")
+      @clilog.debug("Deleting container: #{container.info['Names'][0]}")
       container.delete
     end
   end
@@ -203,7 +203,7 @@ class ContainerMgmt
     images = Docker::Image.all(all: true)
     images.each do |image|
       begin
-        @clilog.debug("Deleting image: #{image.name}")
+        @clilog.debug("Deleting image: #{image.info['RepoTags'][0]}")
         image.remove
       rescue => e
         @clilog.error(e)
