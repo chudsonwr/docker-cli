@@ -80,7 +80,7 @@ class ContainerMgmt
     proxy_compose.launch if status.empty?
   end
 
-  # Allows nginx to set configs for each container launched.
+  # Starts proxy network - Allows nginx to set configs for each container launched.
   def start_network()
     network = Docker::Network.all.find { |network| network.info['Name'] == @proxy_net }
     @clilog.debug('starting the proxy network') unless network
@@ -125,7 +125,7 @@ class ContainerMgmt
 
   # updates the compose file with a unique value for VIRTUAL_HOST which is required for the nginx reverse proxy
   # updates the db service in compose to be unique
-  # updtes the virtual host for reverse proxy to be unique
+  # updates the virtual host for reverse proxy to be unique
   def update_compose_file()
     file_path = "#{@path}docker-compose.yml"
     obj = YAML.load_file(file_path)
@@ -144,7 +144,7 @@ class ContainerMgmt
     @compose.write_config_to_disk(obj, file_path)
   end
   
-  # Update db in compose file object
+  # Update db in compose config object
   def update_db_element(obj)
     obj['services']["db-#{@branch}"] = obj['services']['db']
     obj['services']['web']['depends_on'] = ["db-#{@branch}"]
@@ -152,7 +152,7 @@ class ContainerMgmt
     return obj
   end
 
-  # COonverts a single string entry for envronment variables in docker compose object into an array
+  # Converts a single string entry for environment variables in docker compose config object into an array
   def convert_to_array(obj)
     if obj['services']['web']['environment'].class == String
       obj['services']['web']['environment'] = [obj['services']['web']['environment']]
@@ -160,7 +160,7 @@ class ContainerMgmt
     obj
   end
 
-  # Updates or adds the virtual host env var in a docker compose object
+  # Updates or adds the virtual host env var in a docker compose config object
   def update_virtual_host(obj)
     if obj['services']['web']['environment'].is_a? String
       obj = convert_to_array(obj)
@@ -177,7 +177,7 @@ class ContainerMgmt
     obj
   end
 
-  # Adds the networks element to the compose file if it's not already there
+  # Adds the networks element to the compose config object if it's not already there
   def add_net_element(obj)
     unless obj.dig('networks', 'default', 'external', 'name') == @proxy_net
       obj['networks'] = {"default"=>{"external"=>{"name" => @proxy_net}}} unless obj.dig('networks')
