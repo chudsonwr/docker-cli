@@ -21,9 +21,7 @@ apt-get install -y ruby 2.3.1
 
 groupadd docker
 
-
-
-apt-get install -y build-essential patch ruby-dev zlib1g-dev liblzma-dev sqlite3 libsqlite3-dev
+apt-get install -y build-essential patch ruby-dev zlib1g-dev liblzma-dev libsqlite3-dev
 
 # for nokogiri
 apt-get install -y libxml2-dev libxslt1-dev
@@ -34,4 +32,5 @@ apt-get install -y libqtwebkit4 libqt4-dev xvfb
 
 gem install bundler
 
-gpasswd -a wradmin docker
+# Allows use of docker without Sudo.
+gpasswd -a $USER docker
