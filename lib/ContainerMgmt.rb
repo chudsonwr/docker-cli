@@ -60,6 +60,7 @@ class ContainerMgmt
     when 'clean_all'
       delete_all_containers()
       delete_all_images()
+      stop_network()
     end
   end
 
@@ -84,6 +85,13 @@ class ContainerMgmt
     network = Docker::Network.all.find { |network| network.info['Name'] == @proxy_net }
     @clilog.debug('starting the proxy network') unless network
     Docker::Network.create(@proxy_net) unless network
+  end
+
+  # Stops the proxy network
+  def stop_network()
+    network = Docker::Network.all.find { |network| network.info['Name'] == @proxy_net }
+    @clilog.debug('Stopping the proxy network') if network
+    Docker::Network.remove(@proxy_net) if network
   end
 
   # checks if the application exists or is already running inside a container
