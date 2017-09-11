@@ -5,8 +5,9 @@ require 'docker'
 
 # Main class for orchestrating docker compose stacks.
 class ContainerMgmt
-  def initialize(logger: nil, action: nil, project_repo: nil, branch: nil)
+  def initialize(logger: nil, action: nil, project_repo: nil, branch: nil, proxy: false)
     @clilog = logger
+    @proxy = proxy
     @project_repo = project_repo
     @branch = if branch
                 branch
@@ -16,12 +17,23 @@ class ContainerMgmt
     @action = action
     @path = "#{File.dirname(__FILE__)}/../repos/#{@project_repo.split('/')[-1]}-#{@branch}/"
     @compose = Composer.new(@path, logger: @clilog)
+    @proxy_net = 'nginx-proxy' if @proxy
   end
+
+  attr_reader :action
+  attr_reader :branch
+  attr_reader :project_repo
+  attr_reader :path
+  attr_reader :proxy
+  attr_reader :proxy_net
 
   # depending on the 'action' from the CLI perform various docker functions.
   def process()
-    start_network()
-    start_proxy()
+    # Start the proxy network and nginx reverse proxy container
+    if @proxy
+      start_network()
+      start_proxy()
+    end
     case @action
     when 'build'
       # downloads repo and builds the image
@@ -48,6 +60,7 @@ class ContainerMgmt
     when 'clean_all'
       delete_all_containers()
       delete_all_images()
+      stop_network()
     end
   end
 
@@ -67,13 +80,18 @@ class ContainerMgmt
     proxy_compose.launch if status.empty?
   end
 
-  # Allows nginx to set configs for each container launched. Requires that the application 
-  # you're building has a docker-compose file that references this network
+  # Starts proxy network - Allows nginx to set configs for each container launched.
   def start_network()
-    network_name = 'nginx-proxy'
-    network = Docker::Network.all.find { |network| network.info['Name'] == network_name }
+    network = Docker::Network.all.find { |network| network.info['Name'] == @proxy_net }
     @clilog.debug('starting the proxy network') unless network
-    Docker::Network.create(network_name) unless network
+    Docker::Network.create(@proxy_net) unless network
+  end
+
+  # Stops the proxy network
+  def stop_network()
+    network = Docker::Network.all.find { |network| network.info['Name'] == @proxy_net }
+    @clilog.debug('Stopping the proxy network') if network
+    Docker::Network.remove(@proxy_net) if network
   end
 
   # checks if the application exists or is already running inside a container
@@ -95,12 +113,11 @@ class ContainerMgmt
     @clilog.info('Updating Repo')
     dloader = GitHubDownloader.new(project_repo: @project_repo, branch: @branch, logger: @csilog)
     path = dloader.retrieve_repo()
-    update_repo_with_version()
+    update_repo_with_version() if @proxy
     return path
   end
 
-  # Updates the DB details in the app to allow multiple DB connections
-  # required because all instances share the nginx docker network. :(
+  # Main method for updating the Rails and docker files to allow multiple versions to run.
   def update_repo_with_version()
     update_compose_file()
     update_rails_db_connection("#{@path}config/database.yml")
@@ -108,13 +125,13 @@ class ContainerMgmt
 
   # updates the compose file with a unique value for VIRTUAL_HOST which is required for the nginx reverse proxy
   # updates the db service in compose to be unique
+  # updates the virtual host for reverse proxy to be unique
   def update_compose_file()
     file_path = "#{@path}docker-compose.yml"
     obj = YAML.load_file(file_path)
-    obj['services']["db-#{@branch}"] = obj['services']['db']
-    obj['services']['web']['depends_on'] = ["db-#{@branch}"]
-    obj['services']['web']['environment'].find { |obj| obj[0..12] == 'VIRTUAL_HOST=' }.replace("VIRTUAL_HOST=#{@branch}.dev.com")
-    obj['services'].delete('db')
+    obj = update_db_element(obj)
+    obj = add_net_element(obj)
+    obj = update_virtual_host(obj)
     @compose.write_config_to_disk(obj, file_path)
   end
 
@@ -126,12 +143,57 @@ class ContainerMgmt
     end
     @compose.write_config_to_disk(obj, file_path)
   end
+  
+  # Update db in compose config object
+  def update_db_element(obj)
+    obj['services']["db-#{@branch}"] = obj['services']['db']
+    obj['services']['web']['depends_on'] = ["db-#{@branch}"]
+    obj['services'].delete('db')
+    return obj
+  end
+
+  # Converts a single string entry for environment variables in docker compose config object into an array
+  def convert_to_array(obj)
+    if obj['services']['web']['environment'].class == String
+      obj['services']['web']['environment'] = [obj['services']['web']['environment']]
+    end
+    obj
+  end
+
+  # Updates or adds the virtual host env var in a docker compose config object
+  def update_virtual_host(obj)
+    if obj['services']['web']['environment'].is_a? String
+      obj = convert_to_array(obj)
+      obj = update_virtual_host(obj)
+    elsif obj['services']['web']['environment'].is_a? Array
+      if obj['services']['web']['environment'].find { |obj| obj[0..12] == 'VIRTUAL_HOST=' }.nil?
+        obj['services']['web']['environment'] << "VIRTUAL_HOST=#{@branch}.dev.com"
+      else
+        obj['services']['web']['environment'].find { |obj| obj[0..12] == 'VIRTUAL_HOST=' }.replace("VIRTUAL_HOST=#{@branch}.dev.com")
+      end
+    else
+      obj['services']['web']['environment'] = ["VIRTUAL_HOST=#{@branch}.dev.com"]
+    end
+    obj
+  end
+
+  # Adds the networks element to the compose config object if it's not already there
+  def add_net_element(obj)
+    unless obj.dig('networks', 'default', 'external', 'name') == @proxy_net
+      obj['networks'] = {"default"=>{"external"=>{"name" => @proxy_net}}} unless obj.dig('networks')
+      obj['networks']['default'] = {"external"=>{"name" => @proxy_net}} unless obj.dig('networks', 'default')
+      obj['networks']['default']['external'] = {"name" => @proxy_net}
+    end
+    return obj
+  end
 
   # delete all running containers
   def delete_all_containers()
     containers = Docker::Container.all(all: true)
     containers.each do |container|
+      @clilog.debug("Stopping container: #{container.name}")
       container.stop
+      @clilog.debug("Deleting container: #{container.name}")
       container.delete
     end
   end
@@ -141,6 +203,7 @@ class ContainerMgmt
     images = Docker::Image.all(all: true)
     images.each do |image|
       begin
+        @clilog.debug("Deleting image: #{image.name}")
         image.remove
       rescue => e
         @clilog.error(e)

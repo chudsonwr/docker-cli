@@ -1,5 +1,10 @@
 version: '2'
 services:
+  web:
+    build: .
+    command: bash -c "sleep 10 && rake db:create && rake db:migrate && sleep 5 && rm -rf /myapp/tmp/pids/server.pid && bin/rails s -b '0.0.0.0'"
+    ports:
+      - "3000:3000"
   nginx-proxy:  
     image: jwilder/nginx-proxy
     ports:
